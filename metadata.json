@@ -1,0 +1,7 @@
+{
+  "name": "Armin AI - Intelligent Educational Platform",
+  "description": "An advanced, all-in-one AI platform for Iranian education, culture, and technology, featuring multi-persona expert modes, file analysis, and image generation.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
