@@ -12,11 +12,11 @@ const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'chat' | 'file' | 'image'>('chat');
   const [activePersona, setActivePersona] = useState<Persona>(PERSONAS[0]);
   
-  // Default enableSearch to true for "up-to-date" info requirement
   const [settings, setSettings] = useState<AppSettings>({
     model: DEFAULT_MODEL,
     temperature: 1.0, 
-    enableSearch: true 
+    enableSearch: true,
+    apiKey: '' // Default empty
   });
   
   const [showSettings, setShowSettings] = useState(false);
@@ -27,16 +27,27 @@ const App: React.FC = () => {
       if (savedSettings) {
           try {
               const parsed = JSON.parse(savedSettings);
-              // Validate temperature to prevent API 400 errors
+              // Ensure numeric temperature
               if (typeof parsed.temperature === 'number') {
                   if (parsed.temperature < 0) parsed.temperature = 0;
                   if (parsed.temperature > 2) parsed.temperature = 2;
               } else {
                   parsed.temperature = 1.0;
               }
+              // Ensure other fields exist
+              if (typeof parsed.enableSearch !== 'boolean') parsed.enableSearch = true;
+              if (!parsed.apiKey) parsed.apiKey = '';
+              
               setSettings(parsed);
           } catch (e) {
               console.error("Failed to load settings");
+          }
+      } else {
+          // First time load: Check if user wants to enter key immediately or rely on env
+          if (!process.env.API_KEY) {
+              // Optionally show settings immediately if no env key
+               setShowSettings(true);
+               setNotification({ id: 'init', type: 'info', message: 'لطفاً کلید API خود را در تنظیمات وارد کنید.' });
           }
       }
   }, []);
@@ -83,7 +94,6 @@ const App: React.FC = () => {
             </button>
         </nav>
 
-        {/* Expert Mode Selector */}
         {activeTab === 'chat' && (
             <div className="px-2 mt-4 space-y-1 overflow-y-auto max-h-[40vh] border-t border-white/10 pt-4">
                 <p className="text-xs text-white/30 px-2 mb-2 hidden md:block">دستیار متخصص</p>
@@ -101,29 +111,25 @@ const App: React.FC = () => {
         )}
 
         <div className="mt-auto px-2">
-            <button onClick={() => setShowSettings(true)} className="w-full flex items-center gap-3 p-3 text-white/50 hover:text-white">
+            <button onClick={() => setShowSettings(true)} className={`w-full flex items-center gap-3 p-3 text-white/50 hover:text-white ${!settings.apiKey && !process.env.API_KEY ? 'animate-pulse text-yellow-500' : ''}`}>
                 <span className="text-xl">⚙️</span>
                 <span className="hidden md:inline text-sm">تنظیمات</span>
             </button>
         </div>
       </aside>
 
-      {/* Main Content */}
       <main className="flex-1 relative flex flex-col h-full bg-[#0b0f19] bg-[url('https://picsum.photos/1920/1080?blur=10')] bg-cover bg-center bg-no-repeat bg-blend-overlay">
-         {/* Overlay for readability */}
          <div className="absolute inset-0 bg-slate-900/90 backdrop-blur-sm z-0"></div>
          
          <div className="relative z-10 h-full flex flex-col">
-            {/* Header (Mobile) */}
             <div className="md:hidden p-4 border-b border-white/10 flex justify-between items-center bg-slate-900/50 backdrop-blur">
                 <span className="font-bold text-white">{activePersona.name}</span>
                 <span className="text-xs bg-armin-primary px-2 py-1 rounded text-white">Armin AI</span>
             </div>
 
-            {/* Content Switcher */}
             {activeTab === 'chat' && (
                 <ChatInterface 
-                    key={activePersona.id} // Reset chat on persona change
+                    key={activePersona.id} 
                     persona={activePersona} 
                     settings={settings} 
                     onError={handleError} 

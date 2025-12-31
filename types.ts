@@ -33,6 +33,7 @@ export interface AppSettings {
   model: string;
   temperature: number;
   enableSearch: boolean;
+  apiKey: string; // Added for client-side support
 }
 
 export interface Notification {
