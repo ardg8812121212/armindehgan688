@@ -1,11 +1,11 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { AppSettings, Message, Attachment } from '../types';
-import { IMAGE_MODEL } from '../constants';
+import { IMAGE_MODEL, API_KEY_ENV } from '../constants';
 
 // Helper to initialize AI with the correct key
 const getAI = (settings?: AppSettings) => {
     // Priority: Settings Key -> Env Key -> Empty (will fail gracefully)
-    const key = settings?.apiKey || process.env.API_KEY || '';
+    const key = settings?.apiKey || API_KEY_ENV || '';
     if (!key) {
         throw new Error("⚠️ کلید API یافت نشد. لطفاً در تنظیمات (⚙️) کلید خود را وارد کنید.");
     }

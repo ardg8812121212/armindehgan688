@@ -1,12 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { createRoot } from 'react-dom/client';
-import ChatInterface from './components/ChatInterface';
-import FileAnalyzer from './components/FileAnalyzer';
-import ImageGenerator from './components/ImageGenerator';
-import Settings from './components/Settings';
-import Notification from './components/Notification';
-import { Persona, AppSettings, Notification as NotificationType } from './types';
-import { PERSONAS, DEFAULT_MODEL } from './constants';
+import ChatInterface from './ChatInterface';
+import FileAnalyzer from './FileAnalyzer';
+import ImageGenerator from './ImageGenerator';
+import Settings from './Settings';
+import Notification from './Notification';
+import { Persona, AppSettings, Notification as NotificationType } from '../types';
+import { PERSONAS, DEFAULT_MODEL, API_KEY_ENV } from '../constants';
 
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'chat' | 'file' | 'image'>('chat');
@@ -16,36 +15,33 @@ const App: React.FC = () => {
     model: DEFAULT_MODEL,
     temperature: 1.0, 
     enableSearch: true,
-    apiKey: '' // Default empty
+    apiKey: ''
   });
   
   const [showSettings, setShowSettings] = useState(false);
   const [notification, setNotification] = useState<NotificationType | null>(null);
+  const [isClient, setIsClient] = useState(false);
 
   useEffect(() => {
+      setIsClient(true); // Ensure client-side rendering
       const savedSettings = localStorage.getItem('armin_settings');
       if (savedSettings) {
           try {
               const parsed = JSON.parse(savedSettings);
-              // Ensure numeric temperature
               if (typeof parsed.temperature === 'number') {
                   if (parsed.temperature < 0) parsed.temperature = 0;
                   if (parsed.temperature > 2) parsed.temperature = 2;
               } else {
                   parsed.temperature = 1.0;
               }
-              // Ensure other fields exist
               if (typeof parsed.enableSearch !== 'boolean') parsed.enableSearch = true;
               if (!parsed.apiKey) parsed.apiKey = '';
-              
               setSettings(parsed);
           } catch (e) {
               console.error("Failed to load settings");
           }
       } else {
-          // First time load: Check if user wants to enter key immediately or rely on env
-          if (!process.env.API_KEY) {
-              // Optionally show settings immediately if no env key
+          if (!API_KEY_ENV) {
                setShowSettings(true);
                setNotification({ id: 'init', type: 'info', message: 'لطفاً کلید API خود را در تنظیمات وارد کنید.' });
           }
@@ -56,12 +52,14 @@ const App: React.FC = () => {
       setNotification({ id: Date.now().toString(), type: 'error', message: msg });
   };
 
+  if (!isClient) return <div className="bg-slate-900 h-screen w-full flex items-center justify-center text-white">Loading...</div>;
+
   return (
     <div className="flex h-screen w-full bg-[#0f172a] overflow-hidden">
       <Notification notification={notification} onClose={() => setNotification(null)} />
       <Settings settings={settings} setSettings={setSettings} isOpen={showSettings} onClose={() => setShowSettings(false)} />
 
-      {/* Sidebar (Desktop) / Topbar (Mobile) */}
+      {/* Sidebar */}
       <aside className="w-16 md:w-64 flex-shrink-0 bg-slate-900 border-l border-white/5 flex flex-col items-center md:items-stretch py-4 z-20">
         <div className="px-4 mb-8 text-center md:text-right hidden md:block">
             <h1 className="text-2xl font-black text-transparent bg-clip-text bg-gradient-to-l from-armin-primary to-armin-secondary">
@@ -71,24 +69,15 @@ const App: React.FC = () => {
         </div>
 
         <nav className="flex-1 space-y-2 px-2 w-full">
-            <button 
-                onClick={() => setActiveTab('chat')}
-                className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all ${activeTab === 'chat' ? 'bg-white/10 text-white shadow-lg' : 'text-white/50 hover:bg-white/5 hover:text-white'}`}
-            >
+            <button onClick={() => setActiveTab('chat')} className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all ${activeTab === 'chat' ? 'bg-white/10 text-white shadow-lg' : 'text-white/50 hover:bg-white/5 hover:text-white'}`}>
                 <span className="text-xl">💬</span>
                 <span className="hidden md:inline text-sm font-medium">چت با آرمین</span>
             </button>
-            <button 
-                onClick={() => setActiveTab('file')}
-                className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all ${activeTab === 'file' ? 'bg-white/10 text-white shadow-lg' : 'text-white/50 hover:bg-white/5 hover:text-white'}`}
-            >
+            <button onClick={() => setActiveTab('file')} className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all ${activeTab === 'file' ? 'bg-white/10 text-white shadow-lg' : 'text-white/50 hover:bg-white/5 hover:text-white'}`}>
                 <span className="text-xl">📁</span>
                 <span className="hidden md:inline text-sm font-medium">تحلیل فایل</span>
             </button>
-            <button 
-                onClick={() => setActiveTab('image')}
-                className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all ${activeTab === 'image' ? 'bg-white/10 text-white shadow-lg' : 'text-white/50 hover:bg-white/5 hover:text-white'}`}
-            >
+            <button onClick={() => setActiveTab('image')} className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all ${activeTab === 'image' ? 'bg-white/10 text-white shadow-lg' : 'text-white/50 hover:bg-white/5 hover:text-white'}`}>
                 <span className="text-xl">🎨</span>
                 <span className="hidden md:inline text-sm font-medium">تصویرساز</span>
             </button>
@@ -98,11 +87,7 @@ const App: React.FC = () => {
             <div className="px-2 mt-4 space-y-1 overflow-y-auto max-h-[40vh] border-t border-white/10 pt-4">
                 <p className="text-xs text-white/30 px-2 mb-2 hidden md:block">دستیار متخصص</p>
                 {PERSONAS.map(persona => (
-                    <button
-                        key={persona.id}
-                        onClick={() => setActivePersona(persona)}
-                        className={`w-full flex items-center gap-2 p-2 rounded-lg text-right transition-all text-xs md:text-sm ${activePersona.id === persona.id ? 'bg-armin-primary text-white' : 'text-white/60 hover:bg-white/5'}`}
-                    >
+                    <button key={persona.id} onClick={() => setActivePersona(persona)} className={`w-full flex items-center gap-2 p-2 rounded-lg text-right transition-all text-xs md:text-sm ${activePersona.id === persona.id ? 'bg-armin-primary text-white' : 'text-white/60 hover:bg-white/5'}`}>
                         <span>{persona.icon}</span>
                         <span className="hidden md:inline truncate">{persona.name}</span>
                     </button>
@@ -111,7 +96,7 @@ const App: React.FC = () => {
         )}
 
         <div className="mt-auto px-2">
-            <button onClick={() => setShowSettings(true)} className={`w-full flex items-center gap-3 p-3 text-white/50 hover:text-white ${!settings.apiKey && !process.env.API_KEY ? 'animate-pulse text-yellow-500' : ''}`}>
+            <button onClick={() => setShowSettings(true)} className={`w-full flex items-center gap-3 p-3 text-white/50 hover:text-white ${!settings.apiKey && !API_KEY_ENV ? 'animate-pulse text-yellow-500' : ''}`}>
                 <span className="text-xl">⚙️</span>
                 <span className="hidden md:inline text-sm">تنظیمات</span>
             </button>
@@ -120,31 +105,14 @@ const App: React.FC = () => {
 
       <main className="flex-1 relative flex flex-col h-full bg-[#0b0f19] bg-[url('https://picsum.photos/1920/1080?blur=10')] bg-cover bg-center bg-no-repeat bg-blend-overlay">
          <div className="absolute inset-0 bg-slate-900/90 backdrop-blur-sm z-0"></div>
-         
          <div className="relative z-10 h-full flex flex-col">
             <div className="md:hidden p-4 border-b border-white/10 flex justify-between items-center bg-slate-900/50 backdrop-blur">
                 <span className="font-bold text-white">{activePersona.name}</span>
                 <span className="text-xs bg-armin-primary px-2 py-1 rounded text-white">Armin AI</span>
             </div>
-
-            {activeTab === 'chat' && (
-                <ChatInterface 
-                    key={activePersona.id} 
-                    persona={activePersona} 
-                    settings={settings} 
-                    onError={handleError} 
-                />
-            )}
-            {activeTab === 'file' && (
-                <FileAnalyzer 
-                    persona={activePersona} 
-                    settings={settings} 
-                    onError={handleError}
-                />
-            )}
-            {activeTab === 'image' && (
-                <ImageGenerator onError={handleError} />
-            )}
+            {activeTab === 'chat' && <ChatInterface key={activePersona.id} persona={activePersona} settings={settings} onError={handleError} />}
+            {activeTab === 'file' && <FileAnalyzer persona={activePersona} settings={settings} onError={handleError} />}
+            {activeTab === 'image' && <ImageGenerator onError={handleError} />}
          </div>
       </main>
     </div>

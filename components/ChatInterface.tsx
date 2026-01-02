@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Message, AppSettings, Persona, Attachment } from '../types';
 import { generateContentStream, getStepByStep, generateImageContent } from '../services/geminiService';
+import { API_KEY_ENV } from '../constants';
 
 declare global {
   interface Window {
@@ -9,13 +10,20 @@ declare global {
   }
 }
 
-const CodeBlock: React.FC<{ code: string; language?: string }> = ({ code, language }) => {
+const CodeBlock: React.FC<{ code: string; language?: string; onExplain?: (code: string) => void }> = ({ code, language, onExplain }) => {
     const lines = code.split('\n');
     return (
         <div className="relative my-4 rounded-lg overflow-hidden border border-white/10 bg-[#1e1e1e] shadow-2xl font-mono text-sm group" dir="ltr">
             <div className="flex justify-between items-center px-4 py-2 bg-[#2d2d2d] border-b border-white/5">
                 <span className="text-xs text-white/50 lowercase">{language || 'code'}</span>
-                <button onClick={() => navigator.clipboard.writeText(code)} className="text-xs text-white/40 hover:text-white transition-colors">Copy</button>
+                <div className="flex gap-2">
+                    {onExplain && (
+                        <button onClick={() => onExplain(code)} className="text-xs bg-armin-primary/20 hover:bg-armin-primary/40 text-armin-primary px-2 py-1 rounded transition-colors flex items-center gap-1">
+                            <span>💡</span> توضیح کد
+                        </button>
+                    )}
+                    <button onClick={() => navigator.clipboard.writeText(code)} className="text-xs text-white/40 hover:text-white transition-colors">Copy</button>
+                </div>
             </div>
             <div className="flex overflow-x-auto p-4">
                 <div className="flex flex-col text-right pr-4 text-white/20 select-none border-r border-white/5 mr-4">
@@ -40,25 +48,31 @@ const CodeBlock: React.FC<{ code: string; language?: string }> = ({ code, langua
     );
 };
 
-const ParsedText: React.FC<{ text: string, onImageDetected?: (prompt: string) => void, imageError?: boolean }> = ({ text, onImageDetected, imageError }) => {
+const ParsedText: React.FC<{ text: string, onImageDetected?: (prompt: string) => void, imageError?: boolean, onExplainCode?: (code: string) => void }> = ({ text, onImageDetected, imageError, onExplainCode }) => {
     const parts = text.split(/(```[\s\S]*?```|<<GENERATE_IMAGE:.*?>>)/g);
+    
     useEffect(() => {
         const imgMatch = text.match(/<<GENERATE_IMAGE:(.*?)>>/);
         if (imgMatch && onImageDetected) onImageDetected(imgMatch[1].trim());
-        if (window.MathJax && window.MathJax.typesetPromise) window.MathJax.typesetPromise().catch((err: any) => {});
+        
+        // Render MathJax
+        if (window.MathJax && window.MathJax.typesetPromise) {
+            window.MathJax.typesetPromise().catch((err: any) => console.log('MathJax error:', err));
+        }
     }, [text]);
 
     return (
-        <div className="prose prose-invert max-w-none text-sm leading-relaxed">
+        <div className="prose prose-invert max-w-none text-sm leading-relaxed text-right tex2jax_process">
             {parts.map((part, i) => {
                 if (part.startsWith('```')) {
                     const match = part.match(/```(\w*)\n?([\s\S]*?)```/);
-                    return <CodeBlock key={i} code={match ? match[2] : part.replace(/```/g, '')} language={match ? match[1] : ''} />;
+                    return <CodeBlock key={i} code={match ? match[2] : part.replace(/```/g, '')} language={match ? match[1] : ''} onExplain={onExplainCode} />;
                 }
                 if (part.startsWith('<<GENERATE_IMAGE:')) {
                     if (imageError) return <div key={i} className="text-xs text-red-400 italic bg-red-500/10 p-2 rounded">⚠️ خطا در تولید تصویر</div>;
                     return <div key={i} className="text-xs text-armin-secondary italic animate-pulse">🖼️ در حال آماده‌سازی بوم نقاشی...</div>;
                 }
+                // Handle paragraphs but preserve LaTeX
                 return <p key={i} className="whitespace-pre-wrap mb-2" dangerouslySetInnerHTML={{__html: part.replace(/\*\*(.*?)\*\*/g, '<b>$1</b>').replace(/__(.*?)__/g, '<i>$1</i>')}} />;
             })}
         </div>
@@ -135,7 +149,7 @@ const ChatInterface: React.FC<Props> = ({ persona, settings, onError }) => {
 
   const handleSend = async (text: string = input, isEdit: boolean = false) => {
     if ((!text.trim() && attachments.length === 0) || loading) return;
-    if (!settings.apiKey && !process.env.API_KEY) {
+    if (!settings.apiKey && !API_KEY_ENV) {
         onError("کلید API تنظیم نشده است. لطفاً به تنظیمات بروید.");
         return;
     }
@@ -187,6 +201,11 @@ const ChatInterface: React.FC<Props> = ({ persona, settings, onError }) => {
     } catch (err: any) { onError(err.message); } finally { setLoading(false); }
   };
 
+  const handleExplainCode = (code: string) => {
+      const prompt = `لطفاً این کد را به صورت کامل و دقیق توضیح بده:\n\n\`\`\`\n${code}\n\`\`\`\n\nتوضیحات باید شامل منطق، ساختار و نحوه عملکرد باشد.`;
+      handleSend(prompt);
+  };
+
   return (
     <div className={`flex flex-col h-full ${persona.bgColor} ${persona.textColor}`}>
       <div className={`h-1 w-full bg-gradient-to-r ${persona.themeColor}`}></div>
@@ -203,7 +222,14 @@ const ChatInterface: React.FC<Props> = ({ persona, settings, onError }) => {
             <div className={`relative max-w-[90%] sm:max-w-[80%] p-4 rounded-2xl shadow-lg ${msg.role === 'user' ? 'bg-white/10 text-white rounded-tr-none' : 'bg-black/40 backdrop-blur rounded-tl-none border border-white/10'} ${msg.isError ? 'border-red-500/50 bg-red-900/20' : ''}`}>
                {/* Attachments */}
                {msg.attachments && <div className="flex gap-2 mb-3">{msg.attachments.map((att, i) => <div key={i} className="h-16 w-16 bg-white/10 rounded flex items-center justify-center overflow-hidden">{att.type === 'image' ? <img src={`data:${att.mimeType};base64,${att.data}`} className="h-full w-full object-cover"/> : <span>📄</span>}</div>)}</div>}
-               <ParsedText text={msg.content} onImageDetected={(p) => generateImageForMessage(msg.id, p)} imageError={msg.imageError} />
+               
+               <ParsedText 
+                    text={msg.content} 
+                    onImageDetected={(p) => generateImageForMessage(msg.id, p)} 
+                    imageError={msg.imageError} 
+                    onExplainCode={persona.id === 'engineer' || persona.id === 'armin-core' ? handleExplainCode : undefined}
+               />
+               
                {msg.images && msg.images.map((img, i) => <img key={i} src={img} className="mt-4 rounded-xl border border-white/20 w-full" />)}
                {msg.sources && <div className="mt-4 pt-2 border-t border-white/10 text-xs opacity-70">📚 منابع: {msg.sources.map(s => s.title).join(', ')}</div>}
                {msg.role === 'model' && !msg.isStreaming && !loading && !msg.isError && (
@@ -221,7 +247,7 @@ const ChatInterface: React.FC<Props> = ({ persona, settings, onError }) => {
       <div className="p-4 backdrop-blur-lg bg-black/20 border-t border-white/10">
          {attachments.length > 0 && <div className="flex gap-2 mb-2">{attachments.map((att, i) => <div key={i} className="text-xs bg-white/20 px-2 py-1 rounded">{att.name}</div>)}</div>}
          <div className="flex items-end gap-2 max-w-4xl mx-auto">
-            <input type="file" multiple ref={fileInputRef} className="hidden" onChange={handleFileSelect} accept="image/*,.pdf,.txt" />
+            <input type="file" multiple ref={fileInputRef} className="hidden" onChange={handleFileSelect} accept="image/*,.pdf,.txt,.csv,.json" />
             <button onClick={() => fileInputRef.current?.click()} className="p-3 bg-white/5 hover:bg-white/10 rounded-xl text-white/70">📎</button>
             <button onClick={handleMicClick} className={`p-3 rounded-xl ${isRecording ? 'bg-red-500 animate-pulse' : 'bg-white/5 text-white/70'}`}>🎤</button>
             <textarea ref={inputRef} value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => { if(e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }}} placeholder="پیام..." className="w-full bg-white/5 border border-white/20 rounded-2xl p-4 text-white h-16 resize-none focus:outline-none focus:border-white/40"/>

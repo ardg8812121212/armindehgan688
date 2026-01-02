@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { generateImageContent, analyzeImage } from '../services/geminiService';
 import { AppSettings } from '../types';
+import { API_KEY_ENV } from '../constants';
 
 interface Props {
     onError: (msg: string) => void;
@@ -14,12 +15,6 @@ const ImageGenerator: React.FC<Props> = ({ onError }) => {
     const [analysisFile, setAnalysisFile] = useState<File | null>(null);
     const [analysisResult, setAnalysisResult] = useState('');
     
-    // We need to access settings to get the API Key, but ImageGenerator props didn't have it in previous turn. 
-    // Ideally App.tsx should pass settings here. I will assume it is passed or I'll retrieve from localStorage as fallback if props aren't updated.
-    // However, to keep it clean, I will assume the parent passes it? No, App.tsx in user dump doesn't pass settings to ImageGenerator.
-    // I will read from localStorage directly here for the API Key if needed, OR better, update App.tsx to pass settings.
-    // Let's update App.tsx to pass settings to ImageGenerator.
-
     const getSettings = (): AppSettings => {
          const saved = localStorage.getItem('armin_settings');
          return saved ? JSON.parse(saved) : { model: 'gemini-3-flash-preview', temperature: 1, enableSearch: true, apiKey: '' };
@@ -28,7 +23,7 @@ const ImageGenerator: React.FC<Props> = ({ onError }) => {
     const handleGenerate = async () => {
         if (!prompt.trim()) return;
         const settings = getSettings();
-        if (!settings.apiKey && !process.env.API_KEY) { onError("کلید API یافت نشد."); return; }
+        if (!settings.apiKey && !API_KEY_ENV) { onError("کلید API یافت نشد."); return; }
         
         setLoading(true);
         setImageSrc(null);
@@ -41,7 +36,7 @@ const ImageGenerator: React.FC<Props> = ({ onError }) => {
     const handleAnalyze = async () => {
         if (!analysisFile) return;
         const settings = getSettings();
-        if (!settings.apiKey && !process.env.API_KEY) { onError("کلید API یافت نشد."); return; }
+        if (!settings.apiKey && !API_KEY_ENV) { onError("کلید API یافت نشد."); return; }
 
         setLoading(true);
         setAnalysisResult('');
